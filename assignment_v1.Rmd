@@ -1,0 +1,243 @@
+---
+title: "Practical Machine Learning "
+author: "jonathan"
+date: "October 22, 2015"
+output: html_document
+---
+# WRITEUP
+**Background :**
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+**Data :**
+
+The training data for this project are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Data exploration
+
+We opened the file with :
+```{r}
+data<-read.csv("pml-training.csv")
+```
+A first look using *<span style="color:blue">str</span>*, *<span style="color:blue">head</span>*, *<span style="color:blue">dim</span>* show that the training file has 19622 obs. and 160 variables.
+
+Also we see a lot of columns with either **NA** values, **blanks** or **"#DIV/0!"** character strings.
+```
+str(data)
+'data.frame':	19622 obs. of  160 variables:
+ $ X                       : int  1 2 3 4 5 6 7 8 9 10 ...
+ $ user_name               : Factor w/ 6 levels "adelmo","carlitos",..: 2 2 2 2 2 2 2 2 2 2 ...
+ $ raw_timestamp_part_1    : int  1323084231 1323084231 1323084231 1323084232 1323084232 1323084232 1323084232 1323084232 1323084232 1323084232 ...
+ $ raw_timestamp_part_2    : int  788290 808298 820366 120339 196328 304277 368296 440390 484323 484434 ...
+ $ cvtd_timestamp          : Factor w/ 20 levels "02/12/2011 13:32",..: 9 9 9 9 9 9 9 9 9 9 ...
+ $ new_window              : Factor w/ 2 levels "no","yes": 1 1 1 1 1 1 1 1 1 1 ...
+ $ num_window              : int  11 11 11 12 12 12 12 12 12 12 ...
+ $ roll_belt               : num  1.41 1.41 1.42 1.48 1.48 1.45 1.42 1.42 1.43 1.45 ...
+ $ pitch_belt              : num  8.07 8.07 8.07 8.05 8.07 8.06 8.09 8.13 8.16 8.17 ...
+ $ yaw_belt                : num  -94.4 -94.4 -94.4 -94.4 -94.4 -94.4 -94.4 -94.4 -94.4 -94.4 ...
+ $ total_accel_belt        : int  3 3 3 3 3 3 3 3 3 3 ...
+ $ kurtosis_roll_belt      : Factor w/ 397 levels "","-0.016850",..: 1 1 1 1 1 1 1 1 1 1 ...
+ $ kurtosis_picth_belt     : Factor w/ 317 levels "","-0.021887",..: 1 1 1 1 1 1 1 1 1 1 ...
+ $ kurtosis_yaw_belt       : Factor w/ 2 levels "","#DIV/0!": 1 1 1 1 1 1 1 1 1 1 ...
+ $ skewness_roll_belt      : Factor w/ 395 levels "","-0.003095",..: 1 1 1 1 1 1 1 1 1 1 ...
+ $ skewness_roll_belt.1    : Factor w/ 338 levels "","-0.005928",..: 1 1 1 1 1 1 1 1 1 1 ...
+ $ skewness_yaw_belt       : Factor w/ 2 levels "","#DIV/0!": 1 1 1 1 1 1 1 1 1 1 ...
+ $ max_roll_belt           : num  NA NA NA NA NA NA NA NA NA NA ...
+ $ max_picth_belt          : int  NA NA NA NA NA NA NA NA NA NA ...
+```
+
+Therefore we re-opened the file with cleaning these values.
+```{r}
+data<-read.csv("pml-training.csv",na.strings=c("NA","#DIV/0!",""))
+data<-data[,colSums(is.na(data))==0]
+```
+
+We also see that the first 7 columns are informations only ( = no data) so we remove them for the training
+```{r}
+data<-data[,-c(1:7)]
+```
+The final result looks like (2 first columns displayed here)
+```
+> str(data)
+'data.frame':	19622 obs. of  53 variables:
+ $ roll_belt           : num  1.41 1.41 1.42 1.48 1.48 1.45 1.42 1.42 1.43 1.45 ...
+ $ pitch_belt          : num  8.07 8.07 8.07 8.05 8.07 8.06 8.09 8.13 8.16 8.17 ...
+```
+
+## Data partition
+First we load the needed libraries, 
+```{r}
+library(caret)
+library(rattle)
+```
+Then we set the random seed :
+```{r}
+set.seed(32323)
+``` 
+and finally we partition the training sample
+```{r}
+inTrain<-createDataPartition(y=data$classe,p=0.3,list=FALSE)
+training<-data[inTrain,]
+```
+*Note : rattle package is optionnal, it is only used to make fancy tree decision plot*
+
+## Model Training
+The first model we have tried is tree-based model over all variables 
+```{r}
+modFit<-train(classe~.,method="rpart",data=training)
+```
+Tree decision :
+```{r}
+fancyRpartPlot(modFit$finalModel)
+```
+
+An alternative was also to try **rpart2**, that uses *maxDepth* instead of *Complexity parameter*
+```{r}
+modFit2<-train(classe~.,method="rpart2",data=training)
+```
+Tree decision :
+```{r}
+fancyRpartPlot(modFit2$finalModel)
+```
+
+To evaluate the performances of both classifiers, we use the following command lines :
+```{r}
+modFitpredict<-predict(modFit$finalModel,training, type = "class")
+M<-confusionMatrix(modFitpredict,training$classe)
+```
+and
+```{r}
+modFitpredict2<-predict(modFit2$finalModel,training, type = "class")
+M2<-confusionMatrix(modFitpredict2,training$classe)
+```
+which show that a slightly better accuracy is obtained when using **rpart2**, but still low in both classifiers (<.65)
+
+With **rpart** :
+```
+Overall Statistics
+                                          
+               Accuracy : 0.5594          
+                 95% CI : (0.5503, 0.5684)
+    No Information Rate : 0.2843          
+    P-Value [Acc > NIR] : < 2.2e-16       
+                                          
+                  Kappa : 0.4465          
+ Mcnemar's Test P-Value : < 2.2e-16       
+```
+, compared with **rpart2**
+```
+Overall Statistics
+                                          
+               Accuracy : 0.6224          
+                 95% CI : (0.6135, 0.6311)
+    No Information Rate : 0.2843          
+    P-Value [Acc > NIR] : < 2.2e-16       
+                                          
+                  Kappa : 0.517           
+ Mcnemar's Test P-Value : < 2.2e-16   
+```
+
+Based on these results, we decided to try a random forest-based model, again on all variables.
+
+*Note :* 
+
+*1) <span style="color:blue">varImp(modFit)</span>, <span style="color:blue">varImp(modFit2)</span> command lines show that not all variables are meaningful but for the sake of comparison we used all variables in the random forest training* 
+
+*2) we partitioned the training sample to p=0.3 for the random forest because of computation time issues, however the results are similar as show in the table below :*
+
+| accuracy | p=0.3 | p=0.6 |
+|----------|-------|-------|
+| rpart    | 0.5   | 0.55  |
+| rpart2   | 0.56  | 0.62  |
+
+The model tested has cross-validation using 5 folds :
+
+```
+modFit3<-train(classe~.,method="rf",data=training,trControl=trainControl(method="cv",number = 5),prox=TRUE)
+```
+This model is extremely accurate as shown by the result of the confusionMatrix below :
+
+```
+Overall Statistics
+                                     
+               Accuracy : 1          
+                 95% CI : (0.9994, 1)
+    No Information Rate : 0.2843     
+    P-Value [Acc > NIR] : < 2.2e-16  
+                                     
+                  Kappa : 1          
+ Mcnemar's Test P-Value : NA  
+```
+ 
+ One way to improve the (still long) computation time was to look at the important variables (*<span style="color:blue">varImp(modFit3)</span>*) and notice that not all the 52 variables are meaningful. After selection, we end up with modFit4 which has only the 20 most significant variables of modFit3.
+ 
+## Results for the final model
+```
+modFit4<-train(classe~roll_belt + pitch_forearm + roll_forearm+ magnet_dumbbell_y +yaw_belt+magnet_dumbbell_z + accel_belt_z + magnet_belt_y +magnet_arm_x+ total_accel_belt + accel_dumbbell_y+ accel_arm_x+total_accel_dumbbell+roll_dumbbell + roll_arm+magnet_belt_z  + magnet_arm_y + magnet_forearm_z + gyros_belt_z+accel_belt_y,method="rf",data=training,trControl=trainControl(method="cv",number = 5),prox=TRUE)
+```
+ 
+```
+ Confusion Matrix and Statistics
+
+          Reference
+Prediction    A    B    C    D    E
+         A 1674    0    0    0    0
+         B    0 1140    0    0    0
+         C    0    0 1027    0    0
+         D    0    0    0  965    0
+         E    0    0    0    0 1083
+
+Overall Statistics
+                                     
+               Accuracy : 1          
+                 95% CI : (0.9994, 1)
+    No Information Rate : 0.2843     
+    P-Value [Acc > NIR] : < 2.2e-16  
+                                     
+                  Kappa : 1          
+ Mcnemar's Test P-Value : NA         
+
+Statistics by Class:
+
+                     Class: A Class: B Class: C Class: D Class: E
+Sensitivity            1.0000   1.0000   1.0000   1.0000   1.0000
+Specificity            1.0000   1.0000   1.0000   1.0000   1.0000
+Pos Pred Value         1.0000   1.0000   1.0000   1.0000   1.0000
+Neg Pred Value         1.0000   1.0000   1.0000   1.0000   1.0000
+Prevalence             0.2843   0.1936   0.1744   0.1639   0.1839
+Detection Rate         0.2843   0.1936   0.1744   0.1639   0.1839
+Detection Prevalence   0.2843   0.1936   0.1744   0.1639   0.1839
+Balanced Accuracy      1.0000   1.0000   1.0000   1.0000   1.0000
+```
+ 
+# PROJECT SUBMISSION
+ 
+We use the function provided by the instructions to generate the answers to the 20 tests. We apply the same conditions when creating the test sample :
+``` 
+dataTest<-read.csv("pml-testing.csv",na.strings=c("","NA","#DIV/0!"))
+dataTest<-dataTest[,colSums(is.na(dataTest))==0]
+dataTest<-dataTest[,-c(1:7)]
+```
+with evaluation is done with :
+```
+predictTest<-predict(modFit4$finalModel,dataTest,type="class")
+```
+
+The code to generate the answers, which was provided in the instructions :
+```
+pml_write_files = function(x)
+{
+  n = length(x)
+    {
+    filename = paste0("problem_id_",i,".txt")
+  write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+    }
+}
+```
+is run with the following command :
+```
+pml_write_files(predictTest)
+```
